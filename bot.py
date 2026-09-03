@@ -38,8 +38,8 @@ THUMBNAIL_FILE = "./output/thumbnail.jpg"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
-# 🚀 UNVERIFIED CHANNEL SAFE MODE: 40 Questions (< 15 mins)
-TOTAL_QUESTIONS = 40 
+# 🚀 UNVERIFIED CHANNEL SAFE MODE: 35 Questions (Guaranteed < 15 mins)
+TOTAL_QUESTIONS = 35 
 
 # ================== ANTI-BOT RANDOMIZATION SYSTEM ==================
 TITLES = [
@@ -258,7 +258,6 @@ def upload_to_youtube(video_file):
             video_id = response['id']
             print(f"✅ तहलका! वीडियो LIVE: https://youtu.be/{video_id}")
             
-            # ❌ Thumbnail upload Code removed for unverified channels.
             print("✅ वीडियो सक्सेसफुली अपलोड हो गई है! (बिना कस्टम थंबनेल के)")
             return True
         except Exception as e:
@@ -278,12 +277,12 @@ async def main():
     intro_path = create_thumbnail_intro(quizzes[0]['question'])
     chunk_files = [intro_path]
     
-    # 2. Render all 40 questions
+    # 2. Render all 35 questions
     for i, quiz in enumerate(quizzes):
         chunk_path = await make_video_chunk(quiz, i+1)
         chunk_files.append(chunk_path)
         
-    # 3. Merge Intro + 40 Questions and Add BGM
+    # 3. Merge Intro + 35 Questions and Add BGM
     final_video = merge_videos_and_add_bgm(chunk_files)
     
     # 4. Upload ONLY Video (No Thumbnail)
