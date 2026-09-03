@@ -38,8 +38,8 @@ THUMBNAIL_FILE = "./output/thumbnail.jpg"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
-# 🚀 FINAL MODE: 50 Questions per Video
-TOTAL_QUESTIONS = 50 
+# 🚀 UNVERIFIED CHANNEL SAFE MODE: 40 Questions (< 15 mins)
+TOTAL_QUESTIONS = 40 
 
 # ================== ANTI-BOT RANDOMIZATION SYSTEM ==================
 TITLES = [
@@ -51,7 +51,7 @@ TITLES = [
 ]
 
 HOOKS = ["99% लोग फेल! 🤔", "दिमाग हिला देने वाले सवाल! 🤯", "क्या आप जवाब दे पाएंगे? 👀", "IAS इंटरव्यू के सवाल! 💼"]
-COLORS = [(20, 20, 40), (40, 10, 10), (10, 40, 10), (30, 0, 30), (0, 30, 40)] # Random Thumbnail BG Colors
+COLORS = [(20, 20, 40), (40, 10, 10), (10, 40, 10), (30, 0, 30), (0, 30, 40)] 
 
 TAGS_POOL = [
     ["gk", "hindi gk", "mega quiz", "gk test", "education"],
@@ -66,30 +66,25 @@ if not os.path.exists(BGM_FILE):
         urllib.request.urlretrieve("https://cdn.pixabay.com/download/audio/2022/05/16/audio_91b2c451db.mp3", BGM_FILE)
     except: pass
 
-# ================== PERFECT HINDI TEXT GENERATOR (PIL) ==================
+# ================== PERFECT HINDI TEXT GENERATOR ==================
 def get_hindi_image_clip(text, filename, font_size, color_rgb, width_limit=50):
     font = ImageFont.truetype(HINDI_FONT, font_size)
     lines = textwrap.wrap(text, width=width_limit) 
-    
     dummy_img = Image.new('RGBA', (1, 1))
     draw = ImageDraw.Draw(dummy_img)
-    
     y_text = 0; max_w = 0
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
         max_w = max(max_w, bbox[2] - bbox[0])
         y_text += (bbox[3] - bbox[1]) + 15
-        
     img = Image.new('RGBA', (max_w + 20, y_text + 20), (255, 255, 255, 0))
     draw = ImageDraw.Draw(img)
-    
     y_text = 10
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
         w = bbox[2] - bbox[0]
         draw.text(((max_w - w) / 2 + 10, y_text), line, font=font, fill=color_rgb)
         y_text += (bbox[3] - bbox[1]) + 15
-        
     filepath = os.path.join(TEMP_FOLDER, filename)
     img.save(filepath)
     return ImageClip(filepath)
@@ -98,17 +93,13 @@ def get_hindi_image_clip(text, filename, font_size, color_rgb, width_limit=50):
 def get_questions():
     with open(JSON_FILE_PATH, 'r', encoding='utf-8') as f:
         questions_list = json.load(f)
-        
     if len(questions_list) < TOTAL_QUESTIONS:
-        print(f"❌ सवाल ख़त्म हो गए हैं! कम से कम {TOTAL_QUESTIONS} चाहिए।")
+        print(f"❌ सवाल कम हैं! कम से कम {TOTAL_QUESTIONS} चाहिए।")
         sys.exit(1)
-
     selected = questions_list[:TOTAL_QUESTIONS]
     remaining = questions_list[TOTAL_QUESTIONS:]
-    
     with open(JSON_FILE_PATH, 'w', encoding='utf-8') as f:
         json.dump(remaining, f, ensure_ascii=False, indent=4)
-        
     return selected
 
 # ================== DUAL VOICE TTS ==================
@@ -131,9 +122,9 @@ def make_tick_sfx(duration=5.0):
         return np.where(t_mod < 0.1, click, 0)
     return AudioClip(lambda t: np.vstack([sound_wave(t), sound_wave(t)]).T, duration=duration, fps=44100).volumex(1.5)
 
-# ================== RANDOM THUMBNAIL ==================
-def create_thumbnail(first_question_text):
-    print("🎨 Random Thumbnail बना रहा है...")
+# ================== RANDOM THUMBNAIL (AS VIDEO INTRO) ==================
+def create_thumbnail_intro(first_question_text):
+    print("🎨 Thumbnail Intro बना रहा है...")
     bg_color = random.choice(COLORS)
     hook_text = random.choice(HOOKS)
     
@@ -146,7 +137,13 @@ def create_thumbnail(first_question_text):
     d.text((100, 400), first_question_text[:50] + "...", fill=(255, 255, 255), font=font_s)
     d.text((100, 800), hook_text, fill=(255, 50, 50), font=font_l)
     img.save(THUMBNAIL_FILE)
-    return THUMBNAIL_FILE
+    
+    # Create 3 second video from this image
+    intro_clip = ImageClip(THUMBNAIL_FILE).set_duration(3).set_fps(24)
+    intro_path = os.path.join(TEMP_FOLDER, "chunk_0_intro.mp4")
+    intro_clip.write_videofile(intro_path, codec="libx264", fps=24, preset="ultrafast", logger=None)
+    intro_clip.close()
+    return intro_path
 
 # ================== VIDEO GENERATOR LOOP ==================
 async def make_video_chunk(quiz, index):
@@ -217,7 +214,7 @@ async def make_video_chunk(quiz, index):
 
 # ================== MERGE & BGM ==================
 def merge_videos_and_add_bgm(chunk_files):
-    print("🔄 50 वीडियो जोड़े जा रहे हैं...")
+    print(f"🔄 {TOTAL_QUESTIONS} वीडियो जोड़े जा रहे हैं...")
     concat_txt = os.path.join(TEMP_FOLDER, "files.txt")
     with open(concat_txt, "w") as f:
         for chunk in chunk_files: f.write(f"file '{os.path.basename(chunk)}'\n")
@@ -234,11 +231,10 @@ def merge_videos_and_add_bgm(chunk_files):
     return final_output
 
 # ================== YOUTUBE UPLOAD ==================
-def upload_to_youtube(video_file, thumbnail_file):
-    print("🌐 YouTube पर अपलोड हो रहा है...")
+def upload_to_youtube(video_file):
+    print("🌐 YouTube पर अपलोड हो रहा है (Without Custom Thumbnail API)...")
     token_files = sorted([os.path.join(TOKENS_FOLDER, f) for f in os.listdir(TOKENS_FOLDER) if f.endswith('.json')])
     
-    # 🎲 Random Title, Desc & Tags
     yt_title = random.choice(TITLES)
     yt_desc = f"{yt_title}\n\nइस वीडियो में {TOTAL_QUESTIONS} महत्वपूर्ण GK के सवाल हैं। देखते हैं आप कितनों का सही जवाब दे पाते हैं!\n\nआखिरी सवाल का जवाब कमेंट में ज़रूर बताएं! 👇\n\n#gk #gkinhindi #education #quiz"
     yt_tags = random.choice(TAGS_POOL)
@@ -262,8 +258,8 @@ def upload_to_youtube(video_file, thumbnail_file):
             video_id = response['id']
             print(f"✅ तहलका! वीडियो LIVE: https://youtu.be/{video_id}")
             
-            youtube.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(thumbnail_file)).execute()
-            print("✅ थंबनेल सेट हो गया!")
+            # ❌ Thumbnail upload Code removed for unverified channels.
+            print("✅ वीडियो सक्सेसफुली अपलोड हो गई है! (बिना कस्टम थंबनेल के)")
             return True
         except Exception as e:
             print(f"❌ अपलोड एरर: {e}")
@@ -272,20 +268,26 @@ def upload_to_youtube(video_file, thumbnail_file):
 
 # ================== MAIN EXECUTION ==================
 async def main():
-    wait_time = random.randint(300, 2700) # 5 से 45 मिनट का रैंडम इंतज़ार
+    wait_time = random.randint(300, 1800) # 5 से 30 मिनट इंतज़ार
     print(f"🤖 Anti-Bot System चालू! वीडियो बनाने से पहले {wait_time // 60} मिनट इंतज़ार कर रहा है...")
     time.sleep(wait_time) 
     
     quizzes = get_questions()
-    create_thumbnail(quizzes[0]['question'])
     
-    chunk_files = []
+    # 1. Create Intro (Thumbnail baked into video for 3 seconds)
+    intro_path = create_thumbnail_intro(quizzes[0]['question'])
+    chunk_files = [intro_path]
+    
+    # 2. Render all 40 questions
     for i, quiz in enumerate(quizzes):
         chunk_path = await make_video_chunk(quiz, i+1)
         chunk_files.append(chunk_path)
         
+    # 3. Merge Intro + 40 Questions and Add BGM
     final_video = merge_videos_and_add_bgm(chunk_files)
-    upload_to_youtube(final_video, THUMBNAIL_FILE)
+    
+    # 4. Upload ONLY Video (No Thumbnail)
+    upload_to_youtube(final_video)
 
 if __name__ == "__main__":
     asyncio.run(main())
